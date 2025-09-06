@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.jsx'
 import Dashboard from './pages/Dashboard.jsx';
 import Play from './pages/Play.jsx';
+import Create from './pages/Create.jsx';
 
 const router = createBrowserRouter([
   {
@@ -18,6 +19,10 @@ const router = createBrowserRouter([
   {
     path:"/play",
     element:<Play/>
+  },
+  {
+    path:"/create",
+    element:<Create/>
   }
 ])
 
