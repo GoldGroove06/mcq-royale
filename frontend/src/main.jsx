@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import './index.css'
 import App from './App.jsx'
 import Dashboard from './pages/Dashboard.jsx';
+import Play from './pages/Play.jsx';
 
 const router = createBrowserRouter([
   {
@@ -13,6 +14,10 @@ const router = createBrowserRouter([
   {
     path:"/dashboard",
     element:<Dashboard/>
+  },
+  {
+    path:"/play",
+    element:<Play/>
   }
 ])
 
