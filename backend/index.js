@@ -8,6 +8,8 @@ const gameRoute = require("./routes/gameRoute")
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const Game = require("./models/Game");
+const connectMongo = require('./lib/connectMongo');
 // require('dotenv').config()
 
 const app = express()
@@ -24,53 +26,53 @@ const io = new Server(server, {
         credentials: true
     }
 })
-const questions = [
-    {
-        id: 1,
-        text: "Which language runs in a web browser?",
-        options: ["Java", "C", "Python", "JavaScript"],
-        correctIndex: 3, // JavaScript
-        difficulty: "easy",
-    },
-    {
-        id: 2,
-        text: "What does CSS stand for?",
-        options: [
-            "Central Style Sheets",
-            "Cascading Style Sheets",
-            "Cascading Simple Sheets",
-            "Cars SUVs Sailboats"
-        ],
-        correctIndex: 1, // Cascading Style Sheets
-        difficulty: "easy",
-    },
-    {
-        id: 3,
-        text: "Which of the following is NOT a JavaScript framework?",
-        options: ["React", "Angular", "Django", "Vue"],
-        correctIndex: 2, // Django
-        difficulty: "medium",
-    },
-    {
-        id: 4,
-        text: "What is the time complexity of binary search in a sorted array?",
-        options: ["O(n)", "O(log n)", "O(n log n)", "O(1)"],
-        correctIndex: 1, // O(log n)
-        difficulty: "medium",
-    },
-    {
-        id: 5,
-        text: "In databases, what does ACID stand for?",
-        options: [
-            "Automatic, Consistent, Isolated, Durable",
-            "Atomicity, Consistency, Isolation, Durability",
-            "Access, Control, Integrity, Data",
-            "Analysis, Computation, Indexing, Distribution"
-        ],
-        correctIndex: 1, // Atomicity, Consistency, Isolation, Durability
-        difficulty: "hard",
-    }
-];
+// const questions = [
+//     {
+//         id: 1,
+//         text: "Which language runs in a web browser?",
+//         options: ["Java", "C", "Python", "JavaScript"],
+//         correctIndex: 3, // JavaScript
+//         difficulty: "easy",
+//     },
+//     {
+//         id: 2,
+//         text: "What does CSS stand for?",
+//         options: [
+//             "Central Style Sheets",
+//             "Cascading Style Sheets",
+//             "Cascading Simple Sheets",
+//             "Cars SUVs Sailboats"
+//         ],
+//         correctIndex: 1, // Cascading Style Sheets
+//         difficulty: "easy",
+//     },
+//     {
+//         id: 3,
+//         text: "Which of the following is NOT a JavaScript framework?",
+//         options: ["React", "Angular", "Django", "Vue"],
+//         correctIndex: 2, // Django
+//         difficulty: "medium",
+//     },
+//     {
+//         id: 4,
+//         text: "What is the time complexity of binary search in a sorted array?",
+//         options: ["O(n)", "O(log n)", "O(n log n)", "O(1)"],
+//         correctIndex: 1, // O(log n)
+//         difficulty: "medium",
+//     },
+//     {
+//         id: 5,
+//         text: "In databases, what does ACID stand for?",
+//         options: [
+//             "Automatic, Consistent, Isolated, Durable",
+//             "Atomicity, Consistency, Isolation, Durability",
+//             "Access, Control, Integrity, Data",
+//             "Analysis, Computation, Indexing, Distribution"
+//         ],
+//         correctIndex: 1, // Atomicity, Consistency, Isolation, Durability
+//         difficulty: "hard",
+//     }
+// ];
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -131,9 +133,11 @@ io.use((socket, next) => {
   }
 })
 
+const roomQuestions = {}
+
 io.on('connection', (socket) => {
     console.log('socket connected:', socket.id)
-    socket.on('joinroom', (room) => {
+    socket.on('joinroom', async (room) => {
         //intialize 
         roomUser[socket.id] = {
             name: 'ar',
@@ -142,11 +146,31 @@ io.on('connection', (socket) => {
         }
         socket.join(room)
         console.log('index.js : a user connected to the room')
+        let questionsLoaded = false
+let questions = [];
+        try {
+      
 
+      if (roomQuestions[room]) {
+      
+        questions = roomQuestions[room];
+        questionsLoaded = true
+        console.log(`Serving cached questions for room ${room}`);
+      } else {
+        // fetch once and store in cache
+        await connectMongo()
+        
+        const game = await Game.find({ joinCode: room });
+        questions = game[0].questions
+        questionsLoaded = true
+        // console.log(questions)
+        roomQuestions[room] = questions;
+        console.log(`Fetched questions for room ${room} from DB`);
+      }
 
         // start condition with time
         // fix the last interval and remove the first interval
-        if (true) {
+        if (questionsLoaded) {
             //send questions
             let index = 0;
 
@@ -175,10 +199,18 @@ io.on('connection', (socket) => {
 
         }
 
+    } catch (err) {
+      console.error(err);
+      socket.emit("error", "Could not fetch questions");
+    }
+  });
+
+
+        
+
     })
 
 
-})
 
 app.use("/create", authenticateToken, createRoute)
 app.use("/game", authenticateToken, gameRoute)
