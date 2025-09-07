@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const optionSchema = new mongoose.Schema({
   text: { type: String, required: true }, // option text

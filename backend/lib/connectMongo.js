@@ -1,4 +1,5 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
+require('dotenv').config()
 
 const MONGO_URI = process.env.MONGODB_URI;
 
@@ -32,4 +33,4 @@ async function connectMongo() {
   return cached.conn;
 }
 
-export default connectMongo;
+module.exports = connectMongo;
