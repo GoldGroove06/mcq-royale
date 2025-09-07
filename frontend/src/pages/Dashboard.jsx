@@ -38,13 +38,12 @@ function Dashboard(props) {
 
     const handleJoin = async () => {
         try {
-            const res = await fetch('http://localhost:3000/game/find', {
-                method: 'POST',
+            const res = await fetch(`http://localhost:3000/game/${gameCode}`, {
+                method: 'GET',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ gameCode })
+                }
             });
             if (res.ok) {
                 window.location.href = `/play/${gameCode}`;

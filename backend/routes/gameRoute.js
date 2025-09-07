@@ -2,6 +2,7 @@ const {Router} = require("express")
 const gameRoute = Router()
 const { getGame } = require("../controllers/gameController")
 
-gameRoute.post("/find", getGame)
+// Fetch game metadata by join code
+gameRoute.get("/:gameCode", getGame)
 
 module.exports = gameRoute

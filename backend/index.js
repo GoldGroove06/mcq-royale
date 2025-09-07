@@ -90,8 +90,7 @@ app.get("/", (req, res) => {
   res.send("backend")
 })
 
-// in-memory room user state
-const roomUser = {}
+
 
 app.get("/log-out", (req, res) => {
   res.clearCookie('token');
@@ -134,81 +133,154 @@ io.use((socket, next) => {
 })
 
 const roomQuestions = {}
+const roomUsers = {}
+const roomState = {}
 
 io.on('connection', (socket) => {
-    console.log('socket connected:', socket.id)
-    socket.on('joinroom', async (room) => {
-        //intialize 
-        roomUser[socket.id] = {
-            name: 'ar',
-            lives: 3,
-            eliminated: false
-        }
-        socket.join(room)
-        console.log('index.js : a user connected to the room')
-        let questionsLoaded = false
-let questions = [];
-        try {
-      
+  console.log('socket connected:', socket.id)
 
-      if (roomQuestions[room]) {
-      
-        questions = roomQuestions[room];
-        questionsLoaded = true
-        console.log(`Serving cached questions for room ${room}`);
-      } else {
-        // fetch once and store in cache
+  socket.on('joinroom', async (room) => {
+    try {
+      // Load room data once
+      if (!roomQuestions[room] || !roomState[room]) {
         await connectMongo()
-        
-        const game = await Game.find({ joinCode: room });
-        questions = game[0].questions
-        questionsLoaded = true
-        // console.log(questions)
-        roomQuestions[room] = questions;
-        console.log(`Fetched questions for room ${room} from DB`);
+        const gameDoc = await Game.findOne({ joinCode: room })
+        if (!gameDoc) {
+          socket.emit('room:error', 'Game not found')
+          return
+        }
+
+        roomQuestions[room] = gameDoc.questions
+        const startTime = new Date(gameDoc.startTime).getTime()
+        const joinCloseTime = startTime + 2 * 60 * 1000 // 2 minutes after start
+
+        roomState[room] = {
+          startTime,
+          joinCloseTime,
+          started: false,
+          ended: false,
+          currentQuestionIndex: -1,
+          questionTimer: null,
+        }
+        console.log(`Initialized room ${room} with startTime=${new Date(startTime).toISOString()}`)
       }
 
-        // start condition with time
-        // fix the last interval and remove the first interval
-        if (questionsLoaded) {
-            //send questions
-            let index = 0;
+      const state = roomState[room]
+      const now = Date.now()
 
-            const interval = setInterval(() => {
-                if (index >= questions.length ) {
-                    clearInterval(interval);
-                    socket.emit("game:end", "No more questions! 🎉");
-                    return;
-                }
+      // Enforce 2-minute join window after start
+      if (now > state.joinCloseTime) {
+        socket.emit('room:closed')
+        return
+      }
 
-                console.log(questions[index]);
+      // Track user in room
+      if (!roomUsers[room]) roomUsers[room] = {}
+      roomUsers[room][socket.id] = {
+        name: socket.user?.email || 'player',
+        lives: 3,
+        eliminated: false,
+        lastAnsweredForIndex: -1,
+      }
 
-                socket.emit("question", questions[index]);
-                socket.on('answer', (answer) => {
-                    console.log("in answer")
-                    if (questions[index].correctIndex != answer) {
-                        roomUser[socket.id].lives = roomUser[socket.id].lives-1
-                        console.log(roomUser[socket.id], "incorrect")
-                    }else{
-                        console.log("correct")
-                    }
+      socket.join(room)
+      console.log(`User ${socket.id} joined room ${room}`)
 
-                })
-                index++;
-            }, 5 * 1000);
+      // Inform user of room status
+      if (now < state.startTime) {
+        socket.emit('room:waiting', { msUntilStart: state.startTime - now })
+      } else {
+        socket.emit('room:started')
+      }
+      socket.emit('room:join-window', { msUntilClose: Math.max(0, state.joinCloseTime - now) })
 
+      // Start the game schedule once when startTime is reached
+      if (!state.started) {
+        const msUntilStart = Math.max(0, state.startTime - now)
+
+        setTimeout(() => {
+          if (state.started) return
+          state.started = true
+          io.to(room).emit('game:started')
+
+          // Send questions every 60s
+          const questions = roomQuestions[room]
+          state.currentQuestionIndex = -1
+
+          const sendNext = () => {
+            state.currentQuestionIndex += 1
+            const idx = state.currentQuestionIndex
+            if (idx >= questions.length) {
+              state.ended = true
+              clearInterval(state.questionTimer)
+              io.to(room).emit('game:end', 'No more questions! 🎉')
+              return
+            }
+
+            io.to(room).emit('question', questions[idx])
+          }
+
+          sendNext()
+          state.questionTimer = setInterval(sendNext, 60 * 1000)
+        }, msUntilStart)
+      }
+
+      // Auto-emit room closed at joinCloseTime to all
+      const msUntilClose = Math.max(0, state.joinCloseTime - now)
+      setTimeout(() => io.to(room).emit('room:closed'), msUntilClose)
+
+      // Handle answers per question
+      socket.on('answer', (answerIndex) => {
+        const user = roomUsers[room]?.[socket.id]
+        const questions = roomQuestions[room]
+        const state = roomState[room]
+        if (!user || !questions || !state || state.currentQuestionIndex < 0) return
+        if (user.eliminated) return
+
+        const qIndex = state.currentQuestionIndex
+        // Prevent multiple answers for the same question from same user
+        if (user.lastAnsweredForIndex === qIndex) return
+        user.lastAnsweredForIndex = qIndex
+
+        const isCorrect = questions[qIndex]?.correctIndex === Number(answerIndex)
+        if (!isCorrect) {
+          user.lives -= 1
+          if (user.lives <= 0) {
+            user.eliminated = true
+            io.to(socket.id).emit('player:eliminated')
+            // broadcast elimination to room
+            io.to(room).emit('player:eliminated', { playerId: socket.id, name: user.name })
+          }
         }
+        // notify the user of their result/lives
+        io.to(socket.id).emit('lives:update', { lives: user.lives, correct: isCorrect })
+        // broadcast the answer result to room for updates feed
+        io.to(room).emit('answer:result', { playerId: socket.id, name: user.name, correct: isCorrect })
 
+        // Check winner condition: last remaining non-eliminated
+        const remainingEntries = Object.entries(roomUsers[room] || {}).filter(([_, u]) => !u.eliminated)
+        if (!state.ended && remainingEntries.length === 1) {
+          const [winnerSocketId, winnerUser] = remainingEntries[0]
+          state.ended = true
+          if (state.questionTimer) clearInterval(state.questionTimer)
+          // Congratulate winner; end game for room with winner info
+          io.to(winnerSocketId).emit('game:win', { name: winnerUser.name })
+          io.to(room).emit('game:end', { reason: 'winner', winnerName: winnerUser.name })
+        }
+      })
+
+      // Cleanup on disconnect
+      socket.on('disconnect', () => {
+        if (roomUsers[room]) {
+          delete roomUsers[room][socket.id]
+        }
+      })
     } catch (err) {
-      console.error(err);
-      socket.emit("error", "Could not fetch questions");
+      console.error(err)
+      socket.emit('error', 'Could not join room')
     }
-  });
-
-
-        
-
-    })
+  })
+})
 
 
 
