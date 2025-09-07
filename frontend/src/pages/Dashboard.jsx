@@ -5,6 +5,7 @@ import Nav from '../components/Nav';
 function Dashboard(props) {
     const location = useLocation();
     const [isModel, setIsModel] = useState(false)
+    const [gameCode, setGameCode] = useState('');
     const [latestGame, setLatestGame] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -35,6 +36,26 @@ function Dashboard(props) {
         return () => { isMounted = false; }
     }, []);
 
+    const handleJoin = async () => {
+        try {
+            const res = await fetch('http://localhost:3000/game/find', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ gameCode })
+            });
+            if (res.ok) {
+                window.location.href = `/play/${gameCode}`;
+            } else {
+                setError('Invalid game code.');
+            }
+        } catch (e) {
+            setError('Failed to join game.');
+        }
+    }
+
     return (
         <div className='min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-6'>
             <div className="max-w-5xl mx-auto">
@@ -53,11 +74,11 @@ function Dashboard(props) {
                         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
                             <div className='bg-white/10 border border-white/20 rounded-xl p-6 w-full max-w-md'>
                                 <div className='text-white text-lg mb-3'>Enter Game Code</div>
-                                <input type='text' placeholder='ABC123' className='w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent' />
+                                <input type='text' placeholder='ABC123' className='w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent' value={gameCode} onChange={(e) => setGameCode(e.target.value)}/>
                                 <p className='text-gray-300 text-sm mt-3'>Game starts at 11:00 AM</p>
                                 <div className='flex justify-end space-x-3 mt-4'>
                                     <button onClick={() => setIsModel(false)} className='px-4 py-2 bg-gray-500/20 text-white rounded-lg hover:bg-gray-500/30 transition'>Cancel</button>
-                                    <button className='px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition'>Join</button>
+                                    <button className='px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition' onClick={handleJoin}>Join</button>
                                 </div>
                             </div>
                         </div>

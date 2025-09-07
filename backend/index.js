@@ -4,6 +4,7 @@ const { Server } = require('socket.io')
 const createRoute = require("./routes/createRoute")
 const bodyParser = require('body-parser');
 const authRoute = require("./routes/authRoute")
+const gameRoute = require("./routes/gameRoute")
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
@@ -63,10 +64,14 @@ app.use("/auth-check", authenticateToken, (req, res) => {
 });
 
 io.on('connection', (socket) => {
-    socket.broadcast("yo yo")
+    socket.on("joinroom", (room) => {   
+        socket.join(room)
+        console.log('a user connected to the room')
+    })
 })
 
 app.use("/create", authenticateToken, createRoute)
+app.use("/game", authenticateToken, gameRoute)
 
 
 app.listen(3000, () => {

@@ -31,7 +31,7 @@ const router = createBrowserRouter([
     element: <SignIn/>,
   },
   {
-    path: "/play",
+    path: "/play/:code",
     element:
       <AuthChecker>
         <Play />
