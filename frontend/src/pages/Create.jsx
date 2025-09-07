@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 function Create(props) {
+    const navigate = useNavigate();
     const [quizData, setQuizData] = useState({
         name: '',
         startTime: '',
@@ -18,6 +20,8 @@ function Create(props) {
     });
 
     const [editingIndex, setEditingIndex] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState(null);
 
     const handleQuizDataChange = (field, value) => {
         setQuizData(prev => ({
@@ -160,18 +164,59 @@ function Create(props) {
         return { isValid: true };
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
+        setSubmitError(null);
         const validation = validateDifficultyDistribution();
         if (!validation.isValid) {
             alert(validation.message);
             return;
         }
 
-        console.log('Quiz Data:', quizData);
-        // Here you would typically send the data to your backend
-        alert('Quiz created successfully! Check console for data.');
+        setIsSubmitting(true);
+        try {
+            const response = await fetch('http://localhost:3000/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    name: quizData.name,
+                    startTime: quizData.startTime,
+                    questions: quizData.questions
+                })
+            });
+
+            if (response.status === 401 || response.status === 403) {
+                setSubmitError('You must be signed in to create a quiz.');
+                return;
+            }
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                setSubmitError(err.message || 'Failed to create quiz.');
+                return;
+            }
+
+            const data = await response.json();
+
+            // Navigate to dashboard with newly created game details
+            navigate('/dashboard', {
+                state: {
+                    lastCreatedGame: {
+                        name: quizData.name,
+                        joinCode: data.joinCode,
+                        gameId: data.gameId
+                    }
+                }
+            });
+        } catch (error) {
+            setSubmitError('Network error. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -433,10 +478,16 @@ function Create(props) {
                         <div className="text-center">
                             <button
                                 type="submit"
-                                className="px-12 py-4 bg-gradient-to-r from-yellow-400 to-pink-500 text-black font-bold rounded-xl hover:from-yellow-500 hover:to-pink-600 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl text-lg"
+                                disabled={isSubmitting}
+                                className={`px-12 py-4 bg-gradient-to-r from-yellow-400 to-pink-500 text-black font-bold rounded-xl transition-all duration-300 text-lg ${isSubmitting ? 'opacity-60 cursor-not-allowed' : 'hover:from-yellow-500 hover:to-pink-600 transform hover:scale-105 hover:shadow-2xl'}`}
                             >
-                                Create Quiz
+                                {isSubmitting ? 'Creating…' : 'Create Quiz'}
                             </button>
+                            {submitError && (
+                                <div className="mt-4 text-red-300 bg-red-500/10 border border-red-500/30 rounded p-3">
+                                    {submitError}
+                                </div>
+                            )}
                         </div>
                     </form>
                 </div>
