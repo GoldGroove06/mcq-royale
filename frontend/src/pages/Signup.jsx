@@ -14,7 +14,7 @@ function Signup() {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, email: email, password: password, confirmPassword: confirmPassword }),
+            body: JSON.stringify({ name: name, email: email, password: password, confirmPassword: confirmPassword, username }),
         });
         const data = await response.json();
         console.log(data);

@@ -191,6 +191,11 @@ io.on('connection', (socket) => {
         socket.emit('room:waiting', { msUntilStart: state.startTime - now })
       } else {
         socket.emit('room:started')
+        // If game already started and there's an active/current question, send it to this late joiner
+        if (state.currentQuestionIndex >= 0 && Array.isArray(roomQuestions[room])) {
+          const current = roomQuestions[room][state.currentQuestionIndex]
+          if (current) io.to(socket.id).emit('question', current)
+        }
       }
       socket.emit('room:join-window', { msUntilClose: Math.max(0, state.joinCloseTime - now) })
 

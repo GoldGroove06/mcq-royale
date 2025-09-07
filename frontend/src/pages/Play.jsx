@@ -48,7 +48,8 @@ function Play(props) {
     const [question, setQuestion] = useState(null)
     const [lives, setLives] = useState(3)
     const [eliminated, setEliminated] = useState(false)
-    const [status, setStatus] = useState('idle') // idle | waiting | started | closed | ended
+    const [status, setStatus] = useState('idle') // idle | waiting | started | ended
+    const [joinClosed, setJoinClosed] = useState(false)
     const [msUntilStart, setMsUntilStart] = useState(null)
     const [msUntilJoinClose, setMsUntilJoinClose] = useState(null)
     const [msQuestionLeft, setMsQuestionLeft] = useState(null)
@@ -109,7 +110,7 @@ function Play(props) {
         socketInstance.on('game:started', () => {
             setStatus('started')
         })
-        socketInstance.on('room:closed', () => setStatus('closed'))
+        socketInstance.on('room:closed', () => setJoinClosed(true))
         socketInstance.on('room:join-window', ({ msUntilClose }) => setMsUntilJoinClose(msUntilClose))
 
         socketInstance.on('question', (msg) => {
@@ -240,10 +241,10 @@ function Play(props) {
                             <div className="text-gray-300 text-sm">Room</div>
                             <div className="text-white">
                                 {status === 'waiting' && <span>Starts in: <span className="text-yellow-300 font-mono">{startCountdownText}</span></span>}
-                                {status !== 'waiting' && status !== 'closed' && status !== 'ended' && (
+                                {status !== 'waiting' && status !== 'ended' && !joinClosed && (
                                     <span>Join closes in: <span className="text-emerald-300 font-mono">{joinCloseCountdownText}</span></span>
                                 )}
-                                {status === 'closed' && <span className="text-red-300">Room closed</span>}
+                                {joinClosed && <span className="text-red-300">Room closed</span>}
                                 {status === 'ended' && <span className="text-pink-300">Game ended</span>}
                             </div>
                         </div>
@@ -290,7 +291,7 @@ function Play(props) {
                                 </div>
                             )}
                             {status !== 'started' && (
-                                <div className="text-gray-300">{status === 'waiting' ? 'Waiting for game to start…' : status === 'closed' ? 'Room closed for new joins.' : status === 'ended' ? 'Game ended.' : 'Connecting…'}</div>
+                                <div className="text-gray-300">{status === 'waiting' ? 'Waiting for game to start…' : status === 'ended' ? 'Game ended.' : 'Connecting…'}</div>
                             )}
                             {eliminated && (
                                 <div className="text-red-300">You are eliminated.</div>
